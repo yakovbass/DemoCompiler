@@ -5,6 +5,18 @@ was written by Aviv Yaish. It is an extension to the specifications given
 as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
+
+"""VM writer for the Jack compiler.
+
+This helper encapsulates the VM command syntax and writes commands to the
+output stream.
+
+`segment` names throughout the compiler are expressed using the symbol-table
+kinds (`arg`, `var`, `static`, `field`) plus a few extra pseudo-segments used
+during compilation (`const`, `that`, `pointer`, `temp`). These are mapped to
+the Hack VM segment names via `kind_dict`.
+"""
+
 import typing
 
 
@@ -12,8 +24,14 @@ class VMWriter:
     """
     Writes VM commands into a file. Encapsulates the VM command syntax.
     """
+    # Map compiler-internal segment names -> VM segment names.
     kind_dict = {"arg": "argument", "var": "local", "static": "static", "field": "this", "const": "constant", "that": "that", "pointer": "pointer", "temp": "temp"}
     def __init__(self, output_stream: typing.TextIO) -> None:
+        """Create a new VMWriter.
+
+        Args:
+            output_stream: A writable text stream where VM commands are written.
+        """
         self.__output_file = output_stream
 
     def write_push(self, segment: str, index: int) -> None:

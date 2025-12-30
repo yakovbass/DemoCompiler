@@ -5,10 +5,28 @@ was written by Aviv Yaish. It is an extension to the specifications given
 as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
+
+"""Symbol table implementation for the Jack compiler.
+
+The Jack language has two nested scopes:
+- Class scope: `static` and `field` identifiers.
+- Subroutine scope: `arg` and `var` identifiers.
+
+This implementation models scopes as a linked list of `SymbolNode`s.
+`start_subroutine()` pushes a new scope node whose `next` points to the
+previous scope. `getNext()` pops the current scope.
+
+Note: Some methods return 0 when the table is empty (instead of None) to
+match behavior expected by the surrounding project code.
+"""
+
 import typing
 
 class Entry:
-    ## should add getters
+    """A single symbol table entry.
+
+    Stores the identifier's name, type, kind and running index.
+    """
     def __init__(self, name, type, kind, num):
         self.__name: str = name
         self.__type: str = type
@@ -22,10 +40,14 @@ class Entry:
         return self.__kind
     def getNum(self)->int:
         return self.__num
-    
+
 
 class SymbolNode:
-    # should add getters
+    """A scope node in the symbol table chain.
+
+    Each node holds a list of `Entry` objects for one scope. The `next`
+    pointer refers to the enclosing (outer) scope.
+    """
     def __init__(self, head: list[Entry] = None, next: typing.Any = None):
             self.head = head if head is not None else []
             self.next = next
@@ -45,30 +67,31 @@ class SymbolTable:
     def __init__(self) -> None:
         """Creates a new empty symbol table."""
         self.__symTable = SymbolNode()
-    
-    def isEmpty(self) -> int:
-        """checks if the cur symTable is empty"""
+
+    def isEmpty(self) -> bool:
+        """Return True if the current scope has no entries."""
         return self.__symTable == None or self.__symTable.getHead() == None
-    
+
     def getNext(self) -> None:
-        """retrieves the next symTable in the chain"""
+        """Pop the current scope and move to the enclosing scope."""
         cur = self.__symTable.getNext()
         self.__symTable = cur
-    
+
     def hasNext(self) -> bool:
-        """"checks if the current table has a larger scope"""
+        """Return True if there is an enclosing scope."""
         cur = self.__symTable.getNext()
         return cur != None
 
     def start_subroutine(self) -> None:
-        """Starts a new subroutine scope (i.e., resets the subroutine's 
+        """Starts a new subroutine scope (i.e., resets the subroutine's
         symbol table).
         """
+        # Push a new (empty) scope for the subroutine.
         self.__symTable = SymbolNode(None, self.__symTable)
 
     def define(self, name: str, type: str, kind: str) -> None:
-        """Defines a new identifier of a given name, type and kind and assigns 
-        it a running index. "STATIC" and "FIELD" identifiers have a class scope, 
+        """Defines a new identifier of a given name, type and kind and assigns
+        it a running index. "STATIC" and "FIELD" identifiers have a class scope,
         while "ARG" and "VAR" identifiers have a subroutine scope.
 
         Args:
@@ -77,6 +100,8 @@ class SymbolTable:
             kind (str): the kind of the new identifier, can be:
             "STATIC", "FIELD", "ARG", "VAR".
         """
+        # The running index is the number of already-defined identifiers of this kind
+        # in the *current* scope.
         self.__symTable.addEntry(Entry(name, type, kind, self.var_count(kind)))
 
     def var_count(self, kind: str) -> int:

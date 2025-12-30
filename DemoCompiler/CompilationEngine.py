@@ -5,6 +5,22 @@ was written by Aviv Yaish. It is an extension to the specifications given
 as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
+
+"""Jack Compilation Engine (Project 11 - nand2tetris).
+
+This module drives the recursive-descent compilation of Jack source code
+into VM commands.
+
+High-level flow:
+- `compile_class()` parses a full class.
+- Class / subroutine symbols are tracked via `SymbolTable`.
+- VM code is emitted via `VMWriter`.
+
+The implementation assumes that `JackTokenizer` exposes a *single* current
+token at a time, and that `advance()` has already been called before most
+compile_* routines.
+"""
+
 import typing
 import copy
 from JackTokenizer import JackTokenizer
@@ -31,14 +47,33 @@ class CompilationEngine:
         self.output_stream = VMWriter(output_stream)
         self.class_name: str = None
         self.symTable: SymbolTable = None
+        # Label counters ensure unique VM labels across the entire class compilation.
         self.label_counter_if = -1
         self.label_counter_while = -1
-    
-    def get_if_label(self, mes_in, mes_out):
+
+    def get_if_label(self, mes_in: str, mes_out: str) -> tuple[str, str]:
+        """Return unique label names for an if/else pair.
+
+        Args:
+            mes_in: Base name for the label used when branching into the else clause.
+            mes_out: Base name for the label used to jump out of the if statement.
+
+        Returns:
+            (else_label, out_label) where each label is suffixed with a counter.
+        """
         self.label_counter_if += 1
         return f'{mes_in}.{self.label_counter_if}', f'{mes_out}.{self.label_counter_if}'
-    
-    def get_while_label(self, mes_in, mes_out):
+
+    def get_while_label(self, mes_in: str, mes_out: str) -> tuple[str, str]:
+        """Return unique label names for a while loop.
+
+        Args:
+            mes_in: Base name for the label at the start of the loop.
+            mes_out: Base name for the label at the end (loop exit).
+
+        Returns:
+            (in_label, out_label) where each label is suffixed with a counter.
+        """
         self.label_counter_while += 1
         return f'{mes_in}.{self.label_counter_while}', f'{mes_out}.{self.label_counter_while}'
 
@@ -63,13 +98,13 @@ class CompilationEngine:
             # check for class variables
             while self.input_stream.which_token() == "static" or self.input_stream.which_token() == "field":
                 self.compile_class_var_dec()
-            
+
             #check for class methods
             while self.input_stream.which_token() == "constructor" or\
                 self.input_stream.which_token() == "method" or\
                 self.input_stream.which_token() == "function":
                 self.compile_subroutine()
-            
+
             #skipping }
 
     def compile_class_var_dec(self) -> None:
@@ -128,7 +163,7 @@ class CompilationEngine:
 
         if typeFunc == "method":
             self.symTable.define("this", self.class_name, "arg")
-        
+
         #parameter list
         self.compile_parameter_list()
 
@@ -139,7 +174,7 @@ class CompilationEngine:
         #subroutine body
         # writing {
         self.input_stream.advance()
-    
+
         #writing var declerations
         while self.input_stream.which_token() == "var":
             self.compile_var_dec()
@@ -149,6 +184,10 @@ class CompilationEngine:
         else:
             num_args = 0
 
+        # Emit VM prologue for the subroutine.
+        # - constructor: allocate memory for fields, set `this` (pointer 0)
+        # - method: set `this` from arg0
+        # - function: no implicit receiver
         if typeFunc == "constructor":
             self.output_stream.write_function(f"{self.class_name}.{name}", 0)
 
@@ -168,17 +207,17 @@ class CompilationEngine:
             self.output_stream.write_pop("pointer", 0)
         else:
             self.output_stream.write_function(f"{self.class_name}.{name}", num_args)
-        
-    
-        self.compile_statements(typeReturn)
-        
-        self.input_stream.advance() 
 
-        #reset symTable
-        self.symTable.getNext()      
+
+        self.compile_statements(typeReturn)
+
+        self.input_stream.advance()
+
+        # Restore the previous (class-level) scope after finishing this subroutine.
+        self.symTable.getNext()
 
     def compile_parameter_list(self) -> None:
-        """Compiles a (possibly empty) parameter list, not including the 
+        """Compiles a (possibly empty) parameter list, not including the
         enclosing "()".
         """
         if self.input_stream.which_token() != ")":
@@ -201,7 +240,7 @@ class CompilationEngine:
                 name = self.input_stream.which_token()
                 self.symTable.define(name, type, kind)
                 self.input_stream.advance()
-        
+
     def compile_var_dec(self) -> None:
         """Compiles a var declaration."""
         #writing var
@@ -227,18 +266,25 @@ class CompilationEngine:
             name = self.input_stream.which_token()
             self.symTable.define(name, type, kind)
             self.input_stream.advance()
-        
+
         #skipping ;
         self.input_stream.advance()
-        
+
     def compile_statements(self, name: str = None) -> None:
-        """Compiles a sequence of statements, not including the enclosing 
+        """Compiles a sequence of statements, not including the enclosing
         "{}".
         """
         while self.input_stream.which_token() != "}":
             self.compile_statement(name)
-    
-    def compile_statement(self, name: str = None):
+
+    def compile_statement(self, name: str = None) -> None:
+        """Dispatch compilation based on the current statement keyword.
+
+        Args:
+            name: When compiling a `return` statement, this holds the subroutine
+                return type. For `void` functions we must push a dummy 0 before
+                emitting `return`.
+        """
         if self.input_stream.which_token() == "if":
             self.compile_if()
         if self.input_stream.which_token() == "let":
@@ -251,7 +297,7 @@ class CompilationEngine:
             if name == "void":
                 self.output_stream.write_push("const", 0)
             self.compile_return()
-        
+
     def compile_do(self) -> None:
         """Compiles a do statement."""
         #skipping do
@@ -265,8 +311,17 @@ class CompilationEngine:
         #printing ;
 
         self.input_stream.advance()
-    
-    def compile_subroutineCall(self, className):
+
+    def compile_subroutineCall(self, className: str) -> None:
+        """Compile a subroutine call starting after the first identifier.
+
+        The grammar allows three main call forms:
+        1) `subroutineName(exprList)`              (implicit receiver: `this`)
+        2) `ClassName.subroutineName(exprList)`   (static/constructor call)
+        3) `varName.subroutineName(exprList)`     (method call on an object)
+
+        `className` here is the identifier that already appeared in the source.
+        """
         """compiles when we want to call to a function"""
         if self.input_stream.which_token() == ".":
             #writing .
@@ -275,10 +330,10 @@ class CompilationEngine:
             # self.print_identifier()
             subName = self.input_stream.which_token()
             self.input_stream.advance()
-        
+
             #printing (
             self.input_stream.advance()
-            
+
             cur_sym_table = copy.deepcopy(self.symTable)
             inSym = cur_sym_table.isNameInSym(className)
             while not inSym and cur_sym_table.hasNext():
@@ -386,13 +441,13 @@ class CompilationEngine:
 
     def compile_return(self) -> None:
         """Compiles a return statement."""
-        # printing return 
+        # printing return
         self.input_stream.advance()
-    
+
         #maybe printing expression
         if self.input_stream.which_token() != ";":
             self.compile_expression()
-        
+
         #printing ;
         self.output_stream.write_return()
 
@@ -401,7 +456,7 @@ class CompilationEngine:
     def compile_if(self) -> None:
         """Compiles a if statement, possibly with a trailing else clause."""
         if_out, else_in = self.get_if_label("IF_OUT", "ELSE_IN")
-        
+
         #printing if
         self.input_stream.advance()
 
@@ -428,7 +483,7 @@ class CompilationEngine:
         self.output_stream.write_label(else_in)
         if self.input_stream.which_token() == "else":
             # self.print_keyword()
-            
+
             self.input_stream.advance()
             # printing {
             self.input_stream.advance()
@@ -438,7 +493,7 @@ class CompilationEngine:
             # printing }
             self.input_stream.advance()
         self.output_stream.write_label(if_out)
-        
+
     def compile_expression(self) -> None:
         """Compiles an expression."""
 
@@ -449,10 +504,10 @@ class CompilationEngine:
             self.compile_term()
             self.output_stream.write_arithmetic(self.input_stream.get_arit(op))
             op = self.input_stream.which_token()
-            
+
 
     def compile_term(self) -> None:
-        """Compiles a term. 
+        """Compiles a term.
         This routine is faced with a slight difficulty when
         trying to decide between some of the alternative parsing rules.
         Specifically, if the current token is an identifier, the routing must
@@ -486,7 +541,7 @@ class CompilationEngine:
         elif self.input_stream.token_type() == "IDENTIFIER":
             token = self.input_stream.which_token()
             segment = self.symTable.kind_of(token)
-            
+
             if segment != None:
                 index = self.symTable.index_of(token)
             else:
@@ -500,7 +555,7 @@ class CompilationEngine:
                 index = cur_sym_table.index_of(token)
 
             self.input_stream.advance()
-            
+
             # maybe printing [
             if self.input_stream.which_token() == "[":
                 self.input_stream.advance()
@@ -522,12 +577,12 @@ class CompilationEngine:
                 self.input_stream.advance()
             else:
                 self.output_stream.write_push(segment, index)
-                
+
 
         elif self.input_stream.which_token() == "(":
             self.input_stream.advance()
             self.compile_expression()
-            
+
             #printing )
             self.input_stream.advance()
 
@@ -539,7 +594,7 @@ class CompilationEngine:
 
     def compile_expression_list(self) -> None:
         """Compiles a (possibly empty) comma-separated list of expressions."""
-        countArgs = 0 
+        countArgs = 0
         if self.input_stream.which_token() != ")":
             self.compile_expression()
             countArgs += 1
@@ -548,7 +603,7 @@ class CompilationEngine:
                 self.input_stream.advance()
                 countArgs += 1
                 self.compile_expression()
-        
+
         if self.input_stream.which_token() == "(":
             self.compile_expression()
             countArgs += 1
@@ -559,4 +614,5 @@ class CompilationEngine:
 
         return countArgs
 
-        
+
+

@@ -5,6 +5,19 @@ was written by Aviv Yaish. It is an extension to the specifications given
 as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
+
+"""Jack Tokenizer (Project 10/11 - nand2tetris).
+
+The tokenizer converts a Jack source file into a flat stream of tokens.
+It handles:
+- Removal of block comments (`/* ... */`) and line comments (`// ...`).
+- Correct handling of strings so comment markers inside quotes are preserved.
+- Splitting around Jack symbols while keeping the symbols as separate tokens.
+
+The public API matches the nand2tetris spec: `has_more_tokens`, `advance`,
+`token_type`, and token accessors (`keyword`, `symbol`, etc.).
+"""
+
 import typing
 import re
 
@@ -35,13 +48,15 @@ class JackTokenizer:
 
         for i in range (0, len(lines)): # striping each line from useless spaces
             lines[i] = lines[i].strip()
-        
+
+        # Keep only non-empty, non-comment-only lines.
+        # NOTE: `NOTES` includes comment starters like '/', '*', '#'.
         for i in range (0, len(lines)): #saving only the lines with commands!
             if len(lines[i]) > 0 and lines[i][0] not in NOTES:
                 self.input_lines.append(lines[i])
 
         self.remove_line_comments()
-        
+
         for i in range (len(self.input_lines)):
             line = []
             cur_words = self.split_keep_delimiters(self.input_lines[i])
@@ -52,7 +67,20 @@ class JackTokenizer:
 
         self.total_count = len(self.all_words)
 
-    def split_keep_delimiters(self, cur_string: str):
+    def split_keep_delimiters(self, cur_string: str) -> list[str]:
+        """Split a source line into tokens while keeping symbols as tokens.
+
+        This routine is careful to keep string constants intact (including spaces
+        and symbols) by first splitting on quoted substrings and then splitting
+        the non-quoted parts by delimiters.
+
+        Args:
+            cur_string: One (comment-stripped) line of Jack code.
+
+        Returns:
+            A list of tokens (keywords, identifiers, symbols, integer constants,
+            and string constants).
+        """
         # Regular expression to match quoted substrings
         quoted_pattern = r'"(.*?)"'
         # Regular expression to match delimiters
@@ -82,8 +110,14 @@ class JackTokenizer:
             inside_quote = not inside_quote
 
         return new_parts
-    
-    def remove_line_comments(self):
+
+    def remove_line_comments(self) -> None:
+        """Remove `// ...` comments from each stored input line.
+
+        Important: `//` that appears inside a string constant must be preserved.
+        This method therefore tracks whether we are currently inside a quoted
+        string while scanning each line.
+        """
         in_string = False
         new_lines = []
 
@@ -121,17 +155,17 @@ class JackTokenizer:
         return self.cur_count < self.total_count
 
     def advance(self) -> None:
-        """Gets the next token from the input and makes it the current token. 
-        This method should be called if has_more_tokens() is true. 
+        """Gets the next token from the input and makes it the current token.
+        This method should be called if has_more_tokens() is true.
         Initially there is no current token.
         """
         self.cur_count += 1
         if self.cur_count == 0:
             self.cur_token = self.all_words[self.cur_count]
-        
+
         elif self.has_more_tokens():
             self.cur_token = self.all_words[self.cur_count]
-        
+
     def token_type(self) -> str:
         """
         Returns:
@@ -165,7 +199,12 @@ class JackTokenizer:
             return self.string_val()
 
     def check_identifier(self) -> bool:
-        """
+        """Validate that the current token is a legal Jack identifier.
+
+        Identifiers:
+        - May contain letters, digits, and underscore.
+        - May NOT start with a digit.
+        - Keywords are handled separately before this check.
         """
         numbers_l = "1234567890"
         if self.cur_token[0] in numbers_l:

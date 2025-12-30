@@ -5,6 +5,17 @@ was written by Aviv Yaish. It is an extension to the specifications given
 as allowed by the Creative Common Attribution-NonCommercial-ShareAlike 3.0
 Unported [License](https://creativecommons.org/licenses/by-nc-sa/3.0/).
 """
+
+"""Jack compiler entry-point.
+
+This module wires together the tokenizer (`JackTokenizer`) and the
+compilation engine (`CompilationEngine`). It can compile either:
+- A single `.jack` file, or
+- All `.jack` files in a directory.
+
+Output is written as `.vm` files in the same directory as the input.
+"""
+
 import os
 import sys
 import typing
@@ -36,14 +47,18 @@ if "__main__" == __name__:
     if not len(sys.argv) == 2:
         sys.exit("Invalid usage, please use: JackCompiler <input path>")
     argument_path = os.path.abspath(sys.argv[1])
+    # If a directory was provided, compile every .jack file inside it.
+    # Otherwise, compile the single file path.
     if os.path.isdir(argument_path):
         files_to_assemble = [
             os.path.join(argument_path, filename)
             for filename in os.listdir(argument_path)]
     else:
         files_to_assemble = [argument_path]
-    
+
     for input_path in files_to_assemble:
+        # Skip non-Jack files when a directory is given.
+
         filename, extension = os.path.splitext(input_path)
         if extension.lower() != ".jack":
             continue
