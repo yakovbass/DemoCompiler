@@ -1,4 +1,4 @@
-Jack Compiler
+**Jack Compiler**
 
 This project implements a compiler for the Jack programming language, translating Jack source files into VM code, according to the Nand2Tetris specification.
 
@@ -11,7 +11,7 @@ CompilationEngine.py  – parses the Jack grammar and generates VM code
 SymbolTable.py        – manages symbol scopes and indices
 VMWriter.py           – writes VM commands
 
-Description
+**Description**
 
 The compilation process consists of the following stages:
 
@@ -27,7 +27,7 @@ Identifiers are stored in a symbol table with support for class and subroutine s
 VM output
 The generated VM commands are written to a .vm output file.
 
-Supported Features
+**Supported Features**
 
 Class and subroutine declarations
 
@@ -41,7 +41,7 @@ Array access and subroutine calls
 
 Integer, string, and keyword constants
 
-Usage
+**Usage**
 
 Run the compiler on a Jack file or a directory containing Jack files:
 
@@ -50,7 +50,7 @@ python JackCompiler.py <path>
 
 A .vm file will be created for each .jack file.
 
-Notes
+**Notes**
 
 The compiler follows the official Jack grammar.
 
