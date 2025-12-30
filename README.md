@@ -4,12 +4,12 @@ This project implements a compiler for the Jack programming language, translatin
 
 The compiler is written in Python and was developed as part of an academic assignment on compiler construction.
 
-Files
-JackCompiler.py        – main entry point
-JackTokenizer.py      – tokenizes Jack source code
-CompilationEngine.py  – parses the Jack grammar and generates VM code
-SymbolTable.py        – manages symbol scopes and indices
-VMWriter.py           – writes VM commands
+**Files**
+JackCompiler.py        – main entry point.
+JackTokenizer.py      – tokenizes Jack source code.
+CompilationEngine.py  – parses the Jack grammar and generates VM code.
+SymbolTable.py        – manages symbol scopes and indices.
+VMWriter.py           – writes VM commands.
 
 **Description**
 
